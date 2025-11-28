@@ -63,45 +63,35 @@ def generate_response(history, category_name, user_input, support, rationale, so
     prompt = f"""
 あなたは保護者支援専門の心理士兼特別支援教育の専門家です。
 抽象論ではなく、家庭で今日から実践できる温かい助言を伝えてください。
-語尾は柔らかく、上から目線にせず、寄り添いの姿勢で。
 
 【相談履歴】
 {conversation_log}
 
-【今回の相談】
+【今回の相談内容】
 {user_input}
 
-【推定される特性】
-{category_name}
+【推定される特性】{category_name}
 
-【支援内容】
-{support}
-
-【根拠】
-{rationale}
-
-以下の構造で500文字以内で作成：
-- はじめに共感
-- 行動背景のやさしい説明（専門用語は避ける）
-- 家庭でできる工夫（3つ、箇条書き）
-- 学校に依頼できる支援（1つ、簡潔に）
+500文字以内で下記構造で回答：
+- 共感
+- 行動背景のやさしい説明
+- 家庭でできる工夫（3つ箇条書き）
+- 学校との連携方法（1つ）
 - 避けたい対応（1つ）
-- 最後に温かい一言
-出典は本文に含めず、最後に別行で記載
+- 温かい励ましの一言
 
-日本語で丁寧に回答してください。
+出典は本文には含めず、最後に別記してください
+出典：{source}
 """
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
     )
-
-    generated = response.choices[0].message.content.strip()
-    return generated + f"\n\n📚 出典: {source}"
+    return response.choices[0].message.content.strip()
 
 # ==============================
-# UIレイアウト & CSS
+# UIスタイル
 # ==============================
 st.markdown("""
 <style>
@@ -115,20 +105,18 @@ body { background-color: #fff7ed; }
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="title">🌿 発達支援相談AIエージェント</div>', unsafe_allow_html=True)
-st.write("気になる様子をできるだけ自由に書いてください。")
+st.write("気になる様子を自由に書いてください。")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 表示
 for msg, sender in st.session_state.messages:
     cls = "user-bubble" if sender == "user" else "chat-bubble"
     st.markdown(f'<div class="{cls}">{msg}</div>', unsafe_allow_html=True)
 
-# 入力ボックス
-chat_input = st.text_input("入力してください：", key="chat_input_box")
+# 入力欄（リセットは自動で行われる）
+chat_input = st.text_input("入力してください：", key="chat_input")
 
-# 送信処理
 if st.button("送信"):
     if chat_input.strip():
         st.session_state.messages.append((chat_input, "user"))
@@ -139,15 +127,11 @@ if st.button("送信"):
         supports = selected_category.get("recommended_supports", {})
         first = (supports.get("immediate") or supports.get("short_term") or supports.get("long_term") or [{}])[0]
 
-        support = first.get("description", "家庭や学校で環境調整を行うことが有効です。")
-        rationale = first.get("rationale", "行動背景の理解が重要です。")
+        support = first.get("description", "家庭での環境調整が役に立つ場合があります。")
+        rationale = first.get("rationale", "行動背景の理解が重要とされています。")
         source = first.get("source", "文部科学省 特別支援教育ガイドライン（2023）")
 
         answer = generate_response(st.session_state.messages, name, chat_input, support, rationale, source)
         st.session_state.messages.append((answer, "bot"))
 
-        # 入力欄クリア
-        if "chat_input" in st.session_state:
-            del st.session_state["chat_input"]
-        st.session_state.chat_input_box = ""
-        st.rerun()
+        st.rerun()  # 入力欄が自動的に空になる
