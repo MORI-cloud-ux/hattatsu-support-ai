@@ -27,7 +27,7 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ==============================
-# OpenAI設定
+# OpenAI設定（Secrets推奨）
 # ==============================
 API_KEY = st.secrets.get("OPENAI_API_KEY", "")
 client = OpenAI(api_key=API_KEY)
@@ -39,12 +39,15 @@ with open("nd_kb_v2.json", "r", encoding="utf-8") as f:
     kb = json.load(f)
 
 # ==============================
-# スコアリング
+# カテゴリ判定
 # ==============================
 def score_categories(text):
     scores = []
     for cat in kb["categories"]:
-        score = sum(1 for kw in cat.get("nlp_keywords", []) if kw in text)
+        score = 0
+        for kw in cat.get("nlp_keywords", []):
+            if kw in text:
+                score += 1
         scores.append((cat["name"], score, cat))
     scores.sort(key=lambda x: x[1], reverse=True)
     return scores
@@ -53,63 +56,102 @@ def score_categories(text):
 # GPT回答生成
 # ==============================
 def generate_response(history, category_name, user_input, support, rationale, source):
-    conversation_log = "\n".join(
-        [f"保護者: {m[0]}" if m[1] == "user" else f"AI: {m[0]}" for m in history[-6:]]
+    history_text = "\n".join(
+        [f"保護者: {m[0]}" if m[1] == "user" else f"AI: {m[0]}" for m in history[-4:]]
     )
 
     prompt = f"""
-あなたは保護者支援専門のあたたかい発達支援カウンセラーです。
-専門用語を使わず、今日から家庭でできる小さな実践を、優しく具体的に会話のように説明してください。
-500文字程度で自然な文章にしてください。
+あなたは保護者支援専門のやさしい発達支援カウンセラーです。
+専門用語を使わず、今日から家庭でできる具体的な工夫を、会話のようにわかりやすく伝えてください。
+500文字前後、自然な文章、共感の姿勢で。
 
 【これまでの相談履歴】
-{conversation_log}
+{history_text}
 
 【今回の相談】
 {user_input}
 
-【推定される特性】
+【推定される発達特性】
 {category_name}
 
-【支援方針】
+【支援の方向性】
 {support}
 
-【背景理解】
+【背景の理解】
 {rationale}
 
-※ 出典は文末に「📚 出典：{source}」として必ず添えてください。
+※ 出典は文末に「📚 出典：」の形で記載してください。
 """
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content.strip()
 
-# ==============================
-# UI表示準備
-# ==============================
-st.markdown(
-    "<h2 style='text-align:center; font-family:Zen Maru Gothic;'>🌿 発達支援相談AIエージェント</h2>",
-    unsafe_allow_html=True
-)
 
+# ==============================
+# UIスタイル
+# ==============================
+st.markdown("""
+<style>
+body { background-color: #fff7ed; font-family: 'Zen Maru Gothic', sans-serif; }
+
+.user-bubble {
+    background: #dff4ff;
+    padding: 14px;
+    margin: 10px 0;
+    text-align: right;
+    border-radius: 18px 18px 0px 18px;
+    border: 1px solid #96c7e6;
+    max-width: 80%;
+    margin-left: auto;
+}
+
+.bot-bubble {
+    background: #fffdf8;
+    padding: 14px;
+    margin: 10px 0;
+    text-align: left;
+    border-radius: 18px 18px 18px 0px;
+    border: 1px solid #e5c7a5;
+    max-width: 80%;
+    margin-right: auto;
+}
+
+.title {
+    font-size: 30px;
+    font-family: 'Zen Maru Gothic';
+    text-align: center;
+    font-weight: 700;
+    color: #405c3d;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="title">🌿 発達支援相談AIエージェント</div>', unsafe_allow_html=True)
+st.write("気になる様子を自由に書いてください。")
+
+
+# ==============================
+# チャット履歴
+# ==============================
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 for msg, sender in st.session_state.messages:
-    cls = "user-bubble" if sender == "user" else "chat-bubble"
-    st.markdown(f'<div class="{cls}">{msg}</div>', unsafe_allow_html=True)
+    bubble = "user-bubble" if sender == "user" else "bot-bubble"
+    st.markdown(f'<div class="{bubble}">{msg}</div>', unsafe_allow_html=True)
 
-# テキスト入力管理
-if "chat_input" not in st.session_state:
-    st.session_state.chat_input = ""
 
-user_input = st.text_input("入力してください：", key="chat_input")
+# 入力欄（※自動クリアの安全仕様）
+user_input = st.text_input("入力してください：", key="chat_input", value="")
+
 
 # ==============================
-# 送信処理
+# 送信ボタン処理
 # ==============================
-if st.button("送信"):
+if st.button("送信", use_container_width=True):
     if user_input.strip():
         st.session_state.messages.append((user_input, "user"))
 
@@ -120,16 +162,14 @@ if st.button("送信"):
         first = (supports.get("immediate") or supports.get("short_term") or supports.get("long_term") or [{}])[0]
 
         support = first.get("description", "家庭や学校での環境調整が有効とされています。")
-        rationale = first.get("rationale", "行動の背景には発達理解が重要とされています。")
+        rationale = first.get("rationale", "行動の背景には特性理解が重要とされています。")
         source = first.get("source", "文部科学省 特別支援教育ガイドライン（2023）")
 
-        answer = generate_response(
-            st.session_state.messages, selected_name, user_input, support, rationale, source
-        )
+        answer = generate_response(st.session_state.messages, selected_name, user_input, support, rationale, source)
 
-        st.session_state.messages.append((answer, "bot"))
+        full_answer = f"{answer}\n\n📚 出典：{source}"
+        st.session_state.messages.append((full_answer, "bot"))
 
-        # 入力欄をリセット
-        del st.session_state["chat_input"]
+        # 入力欄クリア（安全方式）
+        st.session_state.chat_input = ""
         st.rerun()
-
