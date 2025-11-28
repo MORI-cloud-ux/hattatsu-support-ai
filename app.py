@@ -171,5 +171,5 @@ if st.button("送信", use_container_width=True):
         st.session_state.messages.append((full_answer, "bot"))
 
         # 入力欄クリア（安全方式）
-        st.session_state.chat_input = ""
         st.rerun()
+
