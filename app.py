@@ -27,7 +27,7 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ==============================
-# OpenAI設定（Secrets推奨）
+# OpenAI設定
 # ==============================
 API_KEY = st.secrets.get("OPENAI_API_KEY", "")
 client = OpenAI(api_key=API_KEY)
@@ -44,10 +44,7 @@ with open("nd_kb_v2.json", "r", encoding="utf-8") as f:
 def score_categories(text):
     scores = []
     for cat in kb["categories"]:
-        score = 0
-        for kw in cat.get("nlp_keywords", []):
-            if kw in text:
-                score += 1
+        score = sum(1 for kw in cat.get("nlp_keywords", []) if kw in text)
         scores.append((cat["name"], score, cat))
     scores.sort(key=lambda x: x[1], reverse=True)
     return scores
@@ -66,7 +63,7 @@ def generate_response(history, category_name, user_input, support, rationale, so
 500文字程度で自然な文章にしてください。
 
 【これまでの相談履歴】
-{history_text}
+{conversation_log}
 
 【今回の相談】
 {user_input}
@@ -75,12 +72,12 @@ def generate_response(history, category_name, user_input, support, rationale, so
 {category_name}
 
 【支援方針】
-{support_text}
+{support}
 
 【背景理解】
-{rationale_text}
+{rationale}
 
-※ 出典は文末に別枠で短くつけてください。
+※ 出典は文末に「📚 出典：{source}」として必ず添えてください。
 """
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -89,21 +86,12 @@ def generate_response(history, category_name, user_input, support, rationale, so
     return response.choices[0].message.content.strip()
 
 # ==============================
-# UIスタイル
+# UI表示準備
 # ==============================
-st.markdown("""
-<style>
-body { background-color: #fff7ed; }
-.chat-bubble { background: #ffffff; padding: 15px; margin: 10px 0;
-               border-radius: 12px; border: 1px solid #e5c7a5; }
-.user-bubble { background: #dff4ff; padding: 15px; margin: 10px 0;
-               text-align:right; border-radius:12px; border:1px solid #96c7e6; }
-.title { font-size:28px; font-family: 'Zen Maru Gothic'; text-align:center; font-weight:600; color:#4b6043; }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown('<div class="title">🌿 発達支援相談AIエージェント</div>', unsafe_allow_html=True)
-st.write("気になる様子を自由に書いてください。")
+st.markdown(
+    "<h2 style='text-align:center; font-family:Zen Maru Gothic;'>🌿 発達支援相談AIエージェント</h2>",
+    unsafe_allow_html=True
+)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -112,18 +100,15 @@ for msg, sender in st.session_state.messages:
     cls = "user-bubble" if sender == "user" else "chat-bubble"
     st.markdown(f'<div class="{cls}">{msg}</div>', unsafe_allow_html=True)
 
-# ===============================
-# 入力欄の初期化
-# ===============================
+# テキスト入力管理
 if "chat_input" not in st.session_state:
     st.session_state.chat_input = ""
 
-# UI入力欄
 user_input = st.text_input("入力してください：", key="chat_input")
 
-# ===============================
+# ==============================
 # 送信処理
-# ===============================
+# ==============================
 if st.button("送信"):
     if user_input.strip():
         st.session_state.messages.append((user_input, "user"))
@@ -139,17 +124,12 @@ if st.button("送信"):
         source = first.get("source", "文部科学省 特別支援教育ガイドライン（2023）")
 
         answer = generate_response(
-            st.session_state.messages,
-            selected_name,
-            user_input,
-            support,
-            rationale,
-            source
+            st.session_state.messages, selected_name, user_input, support, rationale, source
         )
 
-        full_answer = f"{answer}\n\n📚 出典：{source}"
-        st.session_state.messages.append((full_answer, "bot"))
+        st.session_state.messages.append((answer, "bot"))
 
-        # 🔥 入力欄クリア（キー削除で安全リセット）
+        # 入力欄をリセット
         del st.session_state["chat_input"]
         st.rerun()
+
