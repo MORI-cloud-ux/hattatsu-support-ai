@@ -1,7 +1,6 @@
 import streamlit as st
 import json
 from openai import OpenAI
-import uuid
 
 # ==============================
 # Streamlit設定
@@ -28,7 +27,7 @@ if not st.session_state.authenticated:
     st.stop()
 
 # ==============================
-# OpenAI設定
+# OpenAI設定（Secrets推奨）
 # ==============================
 API_KEY = st.secrets.get("OPENAI_API_KEY", "")
 client = OpenAI(api_key=API_KEY)
@@ -81,7 +80,7 @@ def generate_response(history, category_name, user_input, support, rationale, so
 【背景の理解】
 {rationale}
 
-※出典は文章内に含めないでください。文末に出典欄を付けるため不要です。
+※ 出典は文末に「📚 出典：」の形で記載してください。
 """
 
     response = client.chat.completions.create(
@@ -89,6 +88,7 @@ def generate_response(history, category_name, user_input, support, rationale, so
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content.strip()
+
 
 # ==============================
 # UIスタイル
@@ -132,8 +132,9 @@ body { background-color: #fff7ed; font-family: 'Zen Maru Gothic', sans-serif; }
 st.markdown('<div class="title">🌿 発達支援相談AIエージェント</div>', unsafe_allow_html=True)
 st.write("気になる様子を自由に書いてください。")
 
+
 # ==============================
-# チャット履歴
+# チャット履歴表示
 # ==============================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -142,19 +143,27 @@ for msg, sender in st.session_state.messages:
     bubble = "user-bubble" if sender == "user" else "bot-bubble"
     st.markdown(f'<div class="{bubble}">{msg}</div>', unsafe_allow_html=True)
 
-# ==============================
-# 入力欄 key（UUIDで毎回変更）
-# ==============================
-if "input_key" not in st.session_state:
-    st.session_state.input_key = str(uuid.uuid4())
 
-user_input = st.text_input("入力してください：", key=st.session_state.input_key)
+# ==============================
+# 入力欄（text_area + 自動クリア）
+# ==============================
+if "chat_input" not in st.session_state:
+    st.session_state.chat_input = ""
+
+user_input = st.text_area(
+    "入力してください：",
+    key="chat_input",
+    height=160,
+    placeholder="気になる様子を自由にお書きください（長文OK・自動改行）"
+)
+
 
 # ==============================
 # 送信処理
 # ==============================
 if st.button("送信", use_container_width=True):
     if user_input.strip():
+
         st.session_state.messages.append((user_input, "user"))
 
         scores = score_categories(user_input)
@@ -164,7 +173,7 @@ if st.button("送信", use_container_width=True):
         first = (supports.get("immediate") or supports.get("short_term") or supports.get("long_term") or [{}])[0]
 
         support = first.get("description", "家庭や学校での環境調整が有効とされています。")
-        rationale = first.get("rationale", "行動の背景には発達理解が重要とされています。")
+        rationale = first.get("rationale", "行動の背景には特性理解が重要とされています。")
         source = first.get("source", "文部科学省 特別支援教育ガイドライン（2023）")
 
         answer = generate_response(st.session_state.messages, selected_name, user_input, support, rationale, source)
@@ -172,6 +181,6 @@ if st.button("送信", use_container_width=True):
         full_answer = f"{answer}\n\n📚 出典：{source}"
         st.session_state.messages.append((full_answer, "bot"))
 
-        # 🎯 入力欄リセットのため key を再生成
-        st.session_state.input_key = str(uuid.uuid4())
+        # 🎯 入力欄クリア & 再描画
+        st.session_state.chat_input = ""
         st.rerun()
