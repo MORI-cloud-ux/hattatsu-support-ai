@@ -63,7 +63,7 @@ def generate_response(history, category_name, user_input, support, rationale, so
 
     prompt = f"""
 あなたは保護者支援専門のやさしい発達支援カウンセラーです。
-専門用語を使わず、今日から家庭でできる具体的な工夫を、会話のように伝えてください。
+専門用語を使わず、今日から家庭でできる具体的な工夫を、会話のようにわかりやすく伝えてください。
 500文字前後、自然な文章、共感の姿勢で。
 
 【これまでの相談履歴】
@@ -81,17 +81,59 @@ def generate_response(history, category_name, user_input, support, rationale, so
 【背景の理解】
 {rationale}
 
-※ 出典は文末に「📚 出典：」の形で記載してください。
+※出典は文章内に含めないでください。文末に出典欄を付けるため不要です。
 """
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content.strip()
 
+# ==============================
+# UIスタイル
+# ==============================
+st.markdown("""
+<style>
+body { background-color: #fff7ed; font-family: 'Zen Maru Gothic', sans-serif; }
+
+.user-bubble {
+    background: #dff4ff;
+    padding: 14px;
+    margin: 10px 0;
+    text-align: right;
+    border-radius: 18px 18px 0px 18px;
+    border: 1px solid #96c7e6;
+    max-width: 80%;
+    margin-left: auto;
+}
+
+.bot-bubble {
+    background: #fffdf8;
+    padding: 14px;
+    margin: 10px 0;
+    text-align: left;
+    border-radius: 18px 18px 18px 0px;
+    border: 1px solid #e5c7a5;
+    max-width: 80%;
+    margin-right: auto;
+}
+
+.title {
+    font-size: 30px;
+    font-family: 'Zen Maru Gothic';
+    text-align: center;
+    font-weight: 700;
+    color: #405c3d;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="title">🌿 発達支援相談AIエージェント</div>', unsafe_allow_html=True)
+st.write("気になる様子を自由に書いてください。")
 
 # ==============================
-# チャット履歴表示
+# チャット履歴
 # ==============================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -100,22 +142,16 @@ for msg, sender in st.session_state.messages:
     bubble = "user-bubble" if sender == "user" else "bot-bubble"
     st.markdown(f'<div class="{bubble}">{msg}</div>', unsafe_allow_html=True)
 
-
 # ==============================
-# 入力欄管理（UUID方式でクリア）
+# 入力欄 key（UUIDで毎回変更）
 # ==============================
 if "input_key" not in st.session_state:
     st.session_state.input_key = str(uuid.uuid4())
 
-user_input = st.text_area(
-    "入力してください：",
-    key=st.session_state.input_key,
-    height=160,
-    placeholder="気になる様子を自由にお書きください（自動改行・制限なし）",
-)
+user_input = st.text_input("入力してください：", key=st.session_state.input_key)
 
 # ==============================
-# 送信
+# 送信処理
 # ==============================
 if st.button("送信", use_container_width=True):
     if user_input.strip():
@@ -128,14 +164,14 @@ if st.button("送信", use_container_width=True):
         first = (supports.get("immediate") or supports.get("short_term") or supports.get("long_term") or [{}])[0]
 
         support = first.get("description", "家庭や学校での環境調整が有効とされています。")
-        rationale = first.get("rationale", "行動の背景には特性理解が重要とされています。")
+        rationale = first.get("rationale", "行動の背景には発達理解が重要とされています。")
         source = first.get("source", "文部科学省 特別支援教育ガイドライン（2023）")
 
         answer = generate_response(st.session_state.messages, selected_name, user_input, support, rationale, source)
-        full_answer = f"{answer}\n\n📚 出典：{source}"
 
+        full_answer = f"{answer}\n\n📚 出典：{source}"
         st.session_state.messages.append((full_answer, "bot"))
 
-        # 🎯 入力欄のキーを更新 → 再生成 → 自動クリア
+        # 🎯 入力欄リセットのため key を再生成
         st.session_state.input_key = str(uuid.uuid4())
         st.rerun()
