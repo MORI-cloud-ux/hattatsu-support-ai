@@ -144,9 +144,12 @@ for msg, sender in st.session_state.messages:
     st.markdown(f'<div class="{bubble}">{msg}</div>', unsafe_allow_html=True)
 
 
-# 入力欄（※自動クリアの安全仕様）
-user_input = st.text_input("入力してください：", key="chat_input", value="")
+# 入力欄の初期化
+if "chat_input" not in st.session_state:
+    st.session_state.chat_input = ""
 
+# 入力欄
+user_input = st.text_input("入力してください：", key="chat_input")
 
 # ==============================
 # 送信ボタン処理
@@ -170,6 +173,6 @@ if st.button("送信", use_container_width=True):
         full_answer = f"{answer}\n\n📚 出典：{source}"
         st.session_state.messages.append((full_answer, "bot"))
 
-        # 入力欄クリア（安全方式）
+        # 🎯 入力欄クリア & 再描画
+        st.session_state.chat_input = ""
         st.rerun()
-
