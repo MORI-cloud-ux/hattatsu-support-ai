@@ -81,7 +81,7 @@ def generate_response(history, category_name, user_input, support, rationale, so
 【背景の理解】
 {rationale}
 
-※出典は文章内に含めないでください。文末に出典欄を付けるため不要です。
+※出典は文章内に含めないでください。文末に出典欄を付けるため不要です。出典無しとかも記載しない。
 """
 
     response = client.chat.completions.create(
